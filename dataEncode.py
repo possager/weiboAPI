@@ -150,3 +150,6 @@ def mainlogin():
     print a.password.replace('\n','')
     a.login()
     # a.webread('http://blog.sina.com.cn/s/blog_4d89b8340102xic5.html#cre=mysinapc&mod=f&loc=1&r=15&doct=0&rfunc=23')
+
+if __name__ == '__main__':
+    mainlogin()
