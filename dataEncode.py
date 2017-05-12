@@ -12,6 +12,9 @@ import urllib
 import binascii
 import time
 import random
+import pymongo
+
+
 
 
 
@@ -23,6 +26,9 @@ class sinaLogin:
         self.header=None
         self.cookie=None
         self.openner=None
+        self.client=pymongo.MongoClient('localhost',27017)
+        self.COL=self.client['WeiboLogin']
+        self.cookieDOC=self.COL['cookieDoc']
 
 
     def initPara(self):
@@ -94,12 +100,12 @@ class sinaLogin:
 
 
     def login(self):
-        print self.header
-
         loginURL='https://login.sina.com.cn/sso/login.php?client=ssologin.js(v1.4.15)&_='+str(int(time.time()*1000))
 
-        #-------------------
+        #-------------------5-12
         #这次在一开始就直接加入验证码输入框,因为一开始输入验证的话至少还有提示说验证码错误.而之后再处理验证码,则总是不对.
+        #而这次添加在第一次访问时请求验证码就能登录成功,可能与我这个账号本来需要验证码登录有关,如果将来不需要验证码登录的话,就知道这种
+        #   继续请求验证码的方法会不会导致错误.
         headersimg = {
             'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/57.0.2987.133 Safari/537.36',
             'referer': 'https://login.sina.com.cn/signup/signin.php?entry=sso'
@@ -107,9 +113,8 @@ class sinaLogin:
         imageresponse = self.openner.open(
             urllib2.Request(url='https://login.sina.com.cn/cgi/pin.php?' + str(random.randint(10000000, 99999999)),
                             headers=headersimg)).read()
-        ULONG_IMG = None
         timeimg=time.time()
-        print timeimg
+        print int(timeimg*1000)
         with open('/media/administrator/3804CCCA04CC8C76/project/weiboAPI/YZM' + str(
                 int(timeimg * 1000)) + '#' + '.png', 'w+') as imgfl:
             imgfl.write(imageresponse)
@@ -123,10 +128,8 @@ class sinaLogin:
 
 
         request1=urllib2.Request(headers=self.header,url=loginURL,data=urllib.urlencode(self.postdata))
-
         responseInLogin=self.openner.open(request1)
-        for i in self.cookie:
-            print i.name
+
 
         responsedataLogin=responseInLogin.read()
         responseLoginJson=json.loads(responsedataLogin)
@@ -143,21 +146,20 @@ class sinaLogin:
             self._webread('http://login.sina.com.cn/crossdomain2.php?action=login')
             self._webread('http://i.sso.sina.com.cn/js/ssologin.js')
             self._webread('https://login.sina.com.cn/')
-            # print self._webread('http://my.sina.com.cn')
 
-            # a=urllib2.urlopen(crossDomainUrlList[0]).read()
-            # b=urllib2.urlopen(crossDomainUrlList[1]).read()
-            # c=urllib2.urlopen(crossDomainUrlList[2]).read()
-            # d=urllib2.urlopen('http://login.sina.com.cn/crossdomain2.php?action=login')
-            # e=urllib2.urlopen('http://i.sso.sina.com.cn/js/ssologin.js')
-            # f=urllib2.urlopen('https://login.sina.com.cn/')
-            # g=urllib2.urlopen('http://my.sina.com.cn')
-            # print a,'-----a',b,'bbb---bbb',c,'ccc-ccc'
-            # print BeautifulSoup(d,'html5lib').text
-            # print BeautifulSoup(e,'html5lib').text
-            # print BeautifulSoup(f,'html5lib').text
-            # print BeautifulSoup(g,'html5lib').text
+            # -----------------5-12
+            cookiedict = {}  # 用来在下边生成字典,再存在mongodb中
+            for i in self.cookie:
+                cookiedict[i.name] = i.value
+
+            cookiedict['ownner'] = '17082779265'  # 以后根据这个字段来更新
+            cookiedict['pwd'] = 'a123456'
+            self.cookieDOC.update({'ownner': cookiedict['ownner']}, {'$set': cookiedict}, upsert=True)
+            # --------
+
+
         else:
+            #这下边的代码效果不保证,一般正常情况下肯定失败.
             print responseLoginJson['retcode']
             print responseLoginJson['reason']#the reason why fialed to login
 
@@ -202,7 +204,7 @@ class sinaLogin:
     def _webread(self,url1):
         request=urllib2.Request(headers=self.header,url=url1)
         data=self.openner.open(request).read()
-        print self.cookie
+
         # print data
         return data
 
