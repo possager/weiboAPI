@@ -1,3 +1,4 @@
+#_*_coding:utf-8_*_
 import urllib2
 import cookielib
 from bs4 import BeautifulSoup
@@ -9,6 +10,9 @@ import json
 import requests
 import urllib
 import binascii
+import time
+import random
+
 
 
 class sinaLogin:
@@ -18,18 +22,19 @@ class sinaLogin:
         self.password=password
         self.header=None
         self.cookie=None
+        self.openner=None
 
 
     def initPara(self):
         self.header={
-            'User-Agent':'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/57.0.2987.98 Safari/537.36'
+            'User-Agent':'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/57.0.2987.133 Safari/537.36'
         }
         return self
 
 
     def getPreLoginJS(self):
         url='http://login.sina.com.cn/sso/prelogin.php?entry=weibo&callback=sinaSSOController.preloginCallBack&su=&rsakt=mod&client=ssologin.js(v1.4.18)'
-        response=urllib2.urlopen(url).read()
+        response=self.openner.open(url).read()
         data1=re.findall(r'\((\{.*?\})\)',response)[0]
         datajson=json.loads(data1)
         self.rsakv=datajson['rsakv']
@@ -45,11 +50,11 @@ class sinaLogin:
         self.cookieHandler=urllib2.HTTPCookieProcessor(self.cookie)
         if IPproxy:
             proxy_support=urllib2.ProxyHandler({'http':'http://115.85.233.94:80'})
-            openner=urllib2.build_opener(self.cookieHandler,urllib2.HTTPHandler,proxy_support)
+            self.openner=urllib2.build_opener(self.cookieHandler,urllib2.HTTPHandler,proxy_support)
         else:
-            openner=urllib2.build_opener(self.cookieHandler,urllib2.HTTPHandler)
-        urllib2.install_opener(openner)
-        urllib2.install_opener(openner)
+            self.openner=urllib2.build_opener(self.cookieHandler,urllib2.HTTPHandler)
+        # urllib2.install_opener(openner)
+        # urllib2.install_opener(openner)
 
         return self
 
@@ -82,18 +87,51 @@ class sinaLogin:
             'sr': '1920 * 1080',
             'su': self.username.replace('\n',''),
             'useticket': '0',
-            'vsnf': '1'
+            'vsnf': '1',
+
         }
         return self
 
 
     def login(self):
-        loginURL='https://login.sina.com.cn/sso/login.php?client=ssologin.js(v1.4.15)'
+        print self.header
+
+        loginURL='https://login.sina.com.cn/sso/login.php?client=ssologin.js(v1.4.15)&_='+str(int(time.time()*1000))
+
+        #-------------------
+        #这次在一开始就直接加入验证码输入框,因为一开始输入验证的话至少还有提示说验证码错误.而之后再处理验证码,则总是不对.
+        headersimg = {
+            'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/57.0.2987.133 Safari/537.36',
+            'referer': 'https://login.sina.com.cn/signup/signin.php?entry=sso'
+        }
+        imageresponse = self.openner.open(
+            urllib2.Request(url='https://login.sina.com.cn/cgi/pin.php?' + str(random.randint(10000000, 99999999)),
+                            headers=headersimg)).read()
+        ULONG_IMG = None
+        timeimg=time.time()
+        print timeimg
+        with open('/media/administrator/3804CCCA04CC8C76/project/weiboAPI/YZM' + str(
+                int(timeimg * 1000)) + '#' + '.png', 'w+') as imgfl:
+            imgfl.write(imageresponse)
+        imgfl.close()
+        yanzhengma = raw_input('请输入验证码')
+        print yanzhengma
+        self.postdata['door'] = yanzhengma.encode('utf-8')
+
+        #------登录成功!!!
+
+
+
         request1=urllib2.Request(headers=self.header,url=loginURL,data=urllib.urlencode(self.postdata))
 
-        responseLogin=urllib2.urlopen(request1).read()
-        responseLoginJson=json.loads(responseLogin)
-        # print responseLogin
+        responseInLogin=self.openner.open(request1)
+        for i in self.cookie:
+            print i.name
+
+        responsedataLogin=responseInLogin.read()
+        responseLoginJson=json.loads(responsedataLogin)
+        print '-------',responsedataLogin
+        print responseInLogin.url
         if responseLoginJson['retcode']=='0':
             print responseLoginJson['retcode']
             crossDomainUrlList=responseLoginJson['crossDomainUrlList']
@@ -123,33 +161,78 @@ class sinaLogin:
             print responseLoginJson['retcode']
             print responseLoginJson['reason']#the reason why fialed to login
 
+            headersimg={
+                'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/57.0.2987.133 Safari/537.36',
+                'referer': 'https://login.sina.com.cn/signup/signin.php?entry=sso'
+            }
+            imageresponse=self.openner.open(urllib2.Request(url='https://login.sina.com.cn/cgi/pin.php?'+str(random.randint(10000000,99999999)),headers=headersimg)).read()
+            ULONG_IMG=None
+            for i in self.cookie:
+                print i.value
+                ULONG_IMG=i.value
+            timeimg=time.time()
+            print timeimg
+            with open('/media/administrator/3804CCCA04CC8C76/project/weiboAPI/YZM'+str(int(timeimg*1000))+'#'+ULONG_IMG+'.png','w+') as imgfl:
+                # for i in imageresponse:
+                #     imgfl.write(i)
+                imgfl.write(imageresponse)
+            imgfl.close()
+
+            yanzhengma=raw_input('请输入验证码')
+            print yanzhengma
+            self.postdata['door']=yanzhengma.encode('utf-8')
+            self.header['Cookie']='ULOGIN_IMG='+ULONG_IMG
+            self.header['referer']='https://login.sina.com.cn/signup/signin.php?entry=sso'
+            self.header['Accept-Encoding']='gzip, deflate, br'
+            self.header['Accept-Language']='zh-CN,zh;q=0.8'
+            self.header['Connection']='keep-alive'
+            self.header['Content-Length']=531
+            self.header['Content-Type']='application/x-www-form-urlencoded'
+            self.header['Host']='login.sina.com.cn'
+            self.header['Accept']='*/*'
+
+
+
+            # print self.header
+            # print self.postdata
+            self.login()
+
 
 
     def _webread(self,url1):
         request=urllib2.Request(headers=self.header,url=url1)
-        data=urllib2.urlopen(request).read()
+        data=self.openner.open(request).read()
+        print self.cookie
         # print data
         return data
 
 
     def webread(self,url1):
         request = urllib2.Request(headers=self.header, url=url1)
-        response = urllib2.urlopen(request)
+        response = self.openner.open(request)
         data=response.read()
         print response.url
         return data,response
 
 
 def mainlogin():
-    a=sinaLogin(username='passager%40163.com',password='ll13715325265')
+    a=sinaLogin(username='17082779265',password='a123456')
     a.initPara()
     a.enableCookie()#1
     a.getPreLoginJS()#2
     a.getPostData()
     print a.username.replace('\n','')
     print a.password.replace('\n','')
+    print a.cookie
+    # for i in a.cookie:
+    #     print a
+    # file1=file('weibocookie.txt','a+')
+    # with open(file1,mode='a+') as fl:
+    #     fl.write(dict(a.cookie))
     a.login()
-    # a.webread('http://blog.sina.com.cn/s/blog_4d89b8340102xic5.html#cre=mysinapc&mod=f&loc=1&r=15&doct=0&rfunc=23')
+    print a.webread('http://blog.sina.com.cn/s/blog_4d89b8340102xic5.html#cre=mysinapc&mod=f&loc=1&r=15&doct=0&rfunc=23')
+
+
 
 if __name__ == '__main__':
     mainlogin()
